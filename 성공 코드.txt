@@ -1,0 +1,179 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import pandas as pd
+import time
+
+# -----------------------------------------------------
+target_code = "23006715" 
+# -----------------------------------------------------
+
+print(f"🚀 [{target_code}] 1차 성공 코드 + 페이지 넘기기 합체 버전 실행!")
+
+options = Options()
+options.add_experimental_option("detach", True)
+options.add_argument("--start-maximized")
+options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_experimental_option("excludeSwitches", ["enable-automation"])
+options.add_experimental_option('useAutomationExtension', False)
+
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
+
+url = f"https://tickets.interpark.com/goods/{target_code}"
+driver.get(url)
+time.sleep(3)
+
+all_reviews = [] 
+
+try:
+    wait = WebDriverWait(driver, 15)
+
+    # 1. 팝업 닫기
+    try:
+        popup = driver.find_element(By.CSS_SELECTOR, ".popupCloseBtn, .btn_close")
+        popup.click()
+    except:
+        pass
+
+    # 2. 관람후기 탭 클릭
+    print("🖱️ 관람후기 탭 클릭!")
+    try:
+        tab_xpath = "//a[contains(text(), '관람후기')] | //li[contains(text(), '관람후기')] | //a[@data-target='review']"
+        review_tab = wait.until(EC.element_to_be_clickable((By.XPATH, tab_xpath)))
+        driver.execute_script("arguments[0].click();", review_tab)
+        time.sleep(3)
+    except:
+        print("⚠️ 탭 클릭 패스")
+
+    # 3. 스크롤 내리기 (아까 성공했던 비결)
+    print("📜 화면을 아래로 쭉 내립니다...")
+    driver.execute_script("window.scrollTo(0, 2000);")
+    time.sleep(3)
+
+    # 4. 페이지 반복 시작
+    current_page = 1
+    
+    while True:
+        print(f"\n📄 {current_page}페이지 작업 중... (유리상자 탐색)")
+        
+        # iframe 찾기 (매 페이지마다 새로고침 되므로 다시 찾음)
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        found_on_this_page = False
+        target_iframe_index = -1 # 버튼 누를 때 쓸 iframe 번호 기억
+        
+        # =========================================================
+        # [여기서부터 선생님이 주신 성공 코드가 그대로 들어갑니다]
+        # =========================================================
+        
+        # (A) iframe(유리상자) 안쪽 뒤지기
+        if len(iframes) > 0:
+            for i, iframe in enumerate(iframes):
+                try:
+                    driver.switch_to.frame(iframe)
+                    
+                    # 리뷰일 가능성이 있는 모든 요소 찾기
+                    items = driver.find_elements(By.XPATH, "//div[@class='bbsList']//p | //div[@class='reviewItems']//p | //li//div[@class='txt'] | //td")
+                    
+                    if len(items) > 0:
+                        # 글씨가 있으면 저장
+                        count = 0
+                        for item in items:
+                            txt = item.text.replace('\n', ' ').strip()
+                            if len(txt) > 5 and "등록된 후기" not in txt: 
+                                if not any(r['내용'] == txt for r in all_reviews):
+                                    all_reviews.append({"내용": txt})
+                                    count += 1
+                        
+                        if count > 0:
+                            print(f"   -> 🎊 {i}번 상자 안에서 {count}개 획득! (현재 누적 {len(all_reviews)}개)")
+                            found_on_this_page = True
+                            target_iframe_index = i # 이 상자에 버튼도 있을 확률이 높음!
+                    
+                    driver.switch_to.default_content() # 나오기
+                except:
+                    driver.switch_to.default_content()
+                    continue
+
+        # (B) iframe이 아니라면? (바깥 화면 뒤지기)
+        if not found_on_this_page:
+            outside_items = driver.find_elements(By.XPATH, "//div[@class='bbsList']//p | //ul[contains(@class,'review')]//li | //div[@class='txt'] | //p")
+            count = 0
+            for item in outside_items:
+                txt = item.text.replace('\n', ' ').strip()
+                if len(txt) > 10: 
+                    if not any(r['내용'] == txt for r in all_reviews):
+                        all_reviews.append({"내용": txt})
+                        count += 1
+            if count > 0:
+                print(f"   -> [바깥세상]에서 {count}개 획득!")
+                found_on_this_page = True
+
+        # =========================================================
+        # [여기서부터는 다음 페이지로 넘가는 코드입니다]
+        # =========================================================
+        
+        next_page = current_page + 1
+        clicked = False
+        
+        # 버튼 찾기 전략:
+        # 1. 아까 리뷰를 찾았던 그 iframe(target_iframe_index) 안으로 들어가서 버튼을 누른다.
+        # 2. 거기 없으면 다른 iframe이나 바깥을 뒤진다.
+        
+        # (1) 리뷰가 있던 상자 안으로 다시 진입
+        if target_iframe_index != -1:
+            try:
+                driver.switch_to.frame(iframes[target_iframe_index])
+                # 숫자 버튼 찾기
+                try:
+                    btn = driver.find_element(By.LINK_TEXT, str(next_page))
+                    print(f"   -> 숫자 [{next_page}] 클릭!")
+                    driver.execute_script("arguments[0].click();", btn)
+                    clicked = True
+                except:
+                    # 화살표 찾기
+                    try:
+                        btns = driver.find_elements(By.XPATH, "//a[contains(@class,'next')] | //img[contains(@alt,'다음')]/parent::a")
+                        for btn in btns:
+                            if btn.is_displayed():
+                                print("   -> [화살표 >] 클릭!")
+                                driver.execute_script("arguments[0].click();", btn)
+                                clicked = True
+                                break
+                    except:
+                        pass
+                driver.switch_to.default_content()
+            except:
+                driver.switch_to.default_content()
+        
+        # (2) 상자 안에서 못 눌렀으면, 바깥에서 다시 시도
+        if not clicked:
+            try:
+                # 메인 화면에서 숫자 찾기
+                btn = driver.find_element(By.LINK_TEXT, str(next_page))
+                driver.execute_script("arguments[0].click();", btn)
+                clicked = True
+            except:
+                pass
+                
+        if clicked:
+            time.sleep(3) # 로딩 대기
+            current_page += 1
+        else:
+            print("⛔ 더 이상 누를 버튼이 없습니다. (수집 종료)")
+            break
+
+except Exception as e:
+    print(f"⚠️ 오류: {e}")
+
+print(f"\n💾 최종 {len(all_reviews)}개 저장 완료!")
+if all_reviews:
+    df = pd.DataFrame(all_reviews)
+    df.to_excel(f"result_{target_code}_final.xlsx", index=False)
+    print("🎉 확인해보세요!")
+
+input("엔터 키를 누르면 종료됩니다...")
