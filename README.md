@@ -10,7 +10,7 @@
 * **Language:** Python
 * **Analysis:** Jupyter Notebook
 * **Deep Learning:** BERT (Natural Language Processing for Sentiment Analysis)
-* **Data:** 공연 관람 리뷰 및 소셜 데이터 (추정)
+* **Data:** 공연 관람 리뷰 및 소셜 데이터
 
 ## 📂 파일 구성
 * `Untitled1.ipynb`, `Untitled11.ipynb`: 데이터 전처리 및 분석 과정
@@ -18,6 +18,6 @@
 * `빅데이터와 분석_프로젝트.hwpx`: 상세 분석 결과 보고서
 * `성공 코드.txt`: 최종 구현된 핵심 코드 스니펫
 
-## 📊 기대 효과
-* 서울-지방 공연 간의 서비스 품질 격차 확인
-* 관객 경험 최적화를 위한 개선 방향 제시
+## 📊 성공 전략
+* 서울과 동일한 경험 만들기 (서울과 동일한 포토존 및 MD 상품, mr사용 대신에 오케스트라)
+* 뮤지컬 전문 인프라를 구축
